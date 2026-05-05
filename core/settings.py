@@ -40,14 +40,15 @@ INSTALLED_APPS = [
     
     # Твои новые приложения:
     'rest_framework',
+    'rest_framework.authtoken',
     'corsheaders',
     'api', 
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',  # <--- Добавь это здесь
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -126,4 +127,14 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-CORS_ALLOW_ALL_ORIGINS = True
+# Разрешить запросы с фронтенда
+CORS_ALLOWED_ORIGINS = [
+    "http://192.168.88.55:5173",  # IP вашего фронтенда
+    "http://localhost:5173",
+]
+
+# Для отладки можно временно разрешить все (не рекомендуется для продакшена)
+# CORS_ALLOW_ALL_ORIGINS = True
+
+# Разрешить передачу куки/токенов
+CORS_ALLOW_CREDENTIALS = True
