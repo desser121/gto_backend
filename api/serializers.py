@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Step, Exercise, Normative
+from .models import Step, Exercise, Normative, ParticipantList, Participant
 
 
 class NormativeSerializer(serializers.ModelSerializer):
@@ -17,3 +17,48 @@ class NormativeSerializer(serializers.ModelSerializer):
             'exercise_name', 'gold', 'silver', 'bronze', 'is_mandatory', 
             'is_higher_better' 
         ]
+
+
+class ParticipantSerializer(serializers.ModelSerializer):
+    """Сериализатор для участника"""
+    age = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Participant
+        fields = [
+            'id', 'participant_list', 'first_name', 'last_name', 'middle_name',
+            'birth_date', 'gender', 'email', 'phone', 'created_at', 'age'
+        ]
+        read_only_fields = ['created_at']
+
+    def get_age(self, obj):
+        from datetime import date
+        today = date.today()
+        age = today.year - obj.birth_date.year
+        if (today.month, today.day) < (obj.birth_date.month, obj.birth_date.day):
+            age -= 1
+        return age
+
+
+class ParticipantListSerializer(serializers.ModelSerializer):
+    """Сериализатор для списка участников с вложенными участниками"""
+    participants = ParticipantSerializer(many=True, read_only=True)
+    participant_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ParticipantList
+        fields = [
+            'id', 'name', 'description', 'created_at', 'updated_at',
+            'participants', 'participant_count'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_participant_count(self, obj):
+        return obj.participants.count()
+
+
+class ParticipantListCreateUpdateSerializer(serializers.ModelSerializer):
+    """Сериализатор для создания/обновления списка участников"""
+    class Meta:
+        model = ParticipantList
+        fields = ['id', 'name', 'description']
