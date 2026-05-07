@@ -50,3 +50,49 @@ class Normative(models.Model):
 
     def __str__(self):
         return f"{self.exercise.name} ({self.step})"
+
+
+class ParticipantList(models.Model):
+    """Модель для хранения списков участников"""
+    name = models.CharField(max_length=200, verbose_name="Название списка")
+    description = models.TextField(blank=True, null=True, verbose_name="Описание")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата обновления")
+
+    class Meta:
+        verbose_name = "Список участников"
+        verbose_name_plural = "Списки участников"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.name
+
+
+class Participant(models.Model):
+    """Модель участника с привязкой к списку"""
+    participant_list = models.ForeignKey(
+        ParticipantList, 
+        on_delete=models.CASCADE, 
+        related_name='participants',
+        verbose_name="Список"
+    )
+    first_name = models.CharField(max_length=100, verbose_name="Имя")
+    last_name = models.CharField(max_length=100, verbose_name="Фамилия")
+    middle_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="Отчество")
+    birth_date = models.DateField(verbose_name="Дата рождения")
+    gender = models.CharField(
+        max_length=1, 
+        choices=[('М', 'Мужской'), ('Ж', 'Женский')], 
+        verbose_name="Пол"
+    )
+    email = models.EmailField(blank=True, null=True, verbose_name="Email")
+    phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Телефон")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата добавления")
+
+    class Meta:
+        verbose_name = "Участник"
+        verbose_name_plural = "Участники"
+        ordering = ['last_name', 'first_name']
+
+    def __str__(self):
+        return f"{self.last_name} {self.first_name}"

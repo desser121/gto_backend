@@ -1,10 +1,12 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token # Импорт для токенов
-from .views import NormativeViewSet, CurrentUserView
+from .views import NormativeViewSet, CurrentUserView, ParticipantListViewSet, ParticipantViewSet
 
 router = DefaultRouter()
 router.register(r'norms', NormativeViewSet)
+router.register(r'participant-lists', ParticipantListViewSet)
+router.register(r'participants', ParticipantViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
