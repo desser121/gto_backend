@@ -27,7 +27,7 @@ class ParticipantSerializer(serializers.ModelSerializer):
         model = Participant
         fields = [
             'id', 'participant_list', 'first_name', 'last_name', 'middle_name',
-            'birth_date', 'gender', 'email', 'phone', 'created_at', 'age'
+            'birth_date', 'gender', 'email', 'phone', 'uin', 'created_at', 'age'
         ]
         read_only_fields = ['created_at']
 

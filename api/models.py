@@ -87,6 +87,7 @@ class Participant(models.Model):
     )
     email = models.EmailField(blank=True, null=True, verbose_name="Email")
     phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Телефон")
+    uin = models.CharField(max_length=50, blank=True, null=True, verbose_name="УИН")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата добавления")
 
     class Meta:
