@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Step, Exercise, Normative, ParticipantList, Participant
+from .models import Step, Exercise, Normative, ParticipantList, Participant, TestResult
 
 
 class NormativeSerializer(serializers.ModelSerializer):
@@ -19,15 +19,36 @@ class NormativeSerializer(serializers.ModelSerializer):
         ]
 
 
+class TestResultSerializer(serializers.ModelSerializer):
+    """Сериализатор для результатов испытаний"""
+    participant_name = serializers.SerializerMethodField()
+    exercise_name = serializers.CharField(source='exercise.name', read_only=True)
+    medal_display = serializers.CharField(source='get_medal_display', read_only=True)
+
+    class Meta:
+        model = TestResult
+        fields = [
+            'id', 'participant', 'participant_name', 'exercise', 'exercise_name',
+            'result', 'result_date', 'medal', 'medal_display', 'is_mandatory',
+            'protocol_number', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_participant_name(self, obj):
+        return f"{obj.participant.last_name} {obj.participant.first_name}"
+
+
 class ParticipantSerializer(serializers.ModelSerializer):
     """Сериализатор для участника"""
     age = serializers.SerializerMethodField()
+    test_results = TestResultSerializer(many=True, read_only=True)
 
     class Meta:
         model = Participant
         fields = [
             'id', 'participant_list', 'first_name', 'last_name', 'middle_name',
-            'birth_date', 'gender', 'email', 'phone', 'uin', 'created_at', 'age'
+            'birth_date', 'gender', 'email', 'phone', 'uin', 'created_at', 'age',
+            'test_results'
         ]
         read_only_fields = ['created_at']
 

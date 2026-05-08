@@ -97,3 +97,45 @@ class Participant(models.Model):
 
     def __str__(self):
         return f"{self.last_name} {self.first_name}"
+
+
+class TestResult(models.Model):
+    """Модель для хранения результатов испытаний участников"""
+    participant = models.ForeignKey(
+        Participant,
+        on_delete=models.CASCADE,
+        related_name='test_results',
+        verbose_name="Участник"
+    )
+    exercise = models.ForeignKey(
+        Exercise,
+        on_delete=models.CASCADE,
+        verbose_name="Упражнение"
+    )
+    result = models.FloatField(verbose_name="Результат")
+    result_date = models.DateField(verbose_name="Дата сдачи")
+    medal = models.CharField(
+        max_length=10,
+        choices=[
+            ('gold', 'Золото'),
+            ('silver', 'Серебро'),
+            ('bronze', 'Бронза'),
+            ('none', 'Без знака')
+        ],
+        default='none',
+        verbose_name="Знак отличия"
+    )
+    is_mandatory = models.BooleanField(default=False, verbose_name="Обязательное испытание")
+    protocol_number = models.CharField(max_length=100, blank=True, null=True, verbose_name="Номер протокола")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания записи")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата обновления записи")
+
+    class Meta:
+        verbose_name = "Результат испытания"
+        verbose_name_plural = "Результаты испытаний"
+        ordering = ['-result_date', 'participant']
+        unique_together = ['participant', 'exercise', 'result_date']
+
+    def __str__(self):
+        medal_display = self.get_medal_display()
+        return f"{self.participant} - {self.exercise}: {self.result} ({medal_display})"
