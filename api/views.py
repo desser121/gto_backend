@@ -4,8 +4,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.http import HttpResponse
-from .models import Normative, ParticipantList, Participant, Step, Exercise
-from .serializers import NormativeSerializer, ParticipantListSerializer, ParticipantListCreateUpdateSerializer, ParticipantSerializer
+from .models import Normative, ParticipantList, Participant, Step, Exercise, TestResult
+from .serializers import NormativeSerializer, ParticipantListSerializer, ParticipantListCreateUpdateSerializer, ParticipantSerializer, TestResultSerializer
 import openpyxl
 from datetime import datetime
 from io import BytesIO
@@ -14,6 +14,26 @@ from io import BytesIO
 class NormativeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Normative.objects.all()
     serializer_class = NormativeSerializer
+
+
+class TestResultViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet для управления результатами испытаний.
+    GET /api/test-results/ - получить все результаты (с фильтрацией по ?participant={id})
+    POST /api/test-results/ - создать новый результат
+    GET /api/test-results/{id}/ - получить детали результата
+    PUT/PATCH /api/test-results/{id}/ - обновить результат
+    DELETE /api/test-results/{id}/ - удалить результат
+    """
+    queryset = TestResult.objects.all()
+    serializer_class = TestResultSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        participant_id = self.request.query_params.get('participant')
+        if participant_id:
+            queryset = queryset.filter(participant_id=participant_id)
+        return queryset
 
 
 class ParticipantListViewSet(viewsets.ModelViewSet):
@@ -259,14 +279,23 @@ class ExportFederalTemplateView(APIView):
     def _get_participant_normatives(self, participant, step_name, exercises):
         """
         Получает результаты участника по упражнениям.
-        В реальной системе здесь должна быть логика вычисления результатов
-        на основе выполненных испытаний участника.
-        Пока возвращаем заглушки.
+        Использует модель TestResult для получения реальных результатов.
         """
-        # TODO: Здесь нужна модель для хранения результатов испытаний участников
-        # Сейчас возвращаем пустые значения или заглушки
         results = {}
+        
+        # Получаем все результаты испытаний для данного участника
+        test_results = TestResult.objects.filter(
+            participant=participant,
+            exercise__in=exercises
+        ).select_related('exercise')
+        
+        # Создаем словарь результатов по ID упражнения
+        for test_result in test_results:
+            results[test_result.exercise.id] = test_result.result
+        
+        # Для упражнений без результата ставим прочерк
         for exercise in exercises:
-            # Пока ставим прочерк, так как нет модели с результатами испытаний
-            results[exercise.id] = ''
+            if exercise.id not in results:
+                results[exercise.id] = ''
+        
         return results
