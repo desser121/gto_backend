@@ -134,7 +134,8 @@ class TestResult(models.Model):
         verbose_name = "Результат испытания"
         verbose_name_plural = "Результаты испытаний"
         ordering = ['-result_date', 'participant']
-        unique_together = ['participant', 'exercise', 'result_date']
+        # Убираем уникальность по exercise, чтобы участник мог сдавать одно упражнение несколько раз в разные даты
+        # unique_together = ['participant', 'exercise', 'result_date']
 
     def __str__(self):
         medal_display = self.get_medal_display()

@@ -280,6 +280,7 @@ class ExportFederalTemplateView(APIView):
         """
         Получает результаты участника по упражнениям.
         Использует модель TestResult для получения реальных результатов.
+        Возвращает ЛУЧШИЙ результат по каждому упражнению (если их несколько).
         """
         results = {}
         
@@ -289,9 +290,35 @@ class ExportFederalTemplateView(APIView):
             exercise__in=exercises
         ).select_related('exercise')
         
-        # Создаем словарь результатов по ID упражнения
+        # Группируем результаты по упражнениям и выбираем лучший
+        exercise_results = {}
         for test_result in test_results:
-            results[test_result.exercise.id] = test_result.result
+            ex_id = test_result.exercise.id
+            
+            if ex_id not in exercise_results:
+                exercise_results[ex_id] = []
+            exercise_results[ex_id].append(test_result)
+        
+        # Для каждого упражнения выбираем лучший результат
+        for ex_id, result_list in exercise_results.items():
+            # Находим упражнение чтобы узнать is_higher_better
+            exercise = result_list[0].exercise
+            norm = Normative.objects.filter(
+                exercise=exercise,
+                step__name=step_name
+            ).first()
+            
+            is_higher_better = norm.is_higher_better if norm else False
+            
+            # Сортируем результаты и берем лучший
+            if is_higher_better:
+                # Чем больше значение, тем лучше (отжимания, прыжки)
+                best_result = max(result_list, key=lambda x: x.result)
+            else:
+                # Чем меньше значение, тем лучше (бег)
+                best_result = min(result_list, key=lambda x: x.result)
+            
+            results[ex_id] = best_result.result
         
         # Для упражнений без результата ставим прочерк
         for exercise in exercises:
