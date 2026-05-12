@@ -94,33 +94,79 @@ class ExportFederalTemplateView(APIView):
     """
     Экспорт данных в федеральный шаблон GTO.
     POST /api/export-federal-template/
-    Body: {"participant_list_id": <id>}
+    Body: {"participant_list_id": <id>} ИЛИ {"participants": [...]} для прямой выгрузки из Dashboard
     """
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         participant_list_id = request.data.get('participant_list_id')
+        participants_data = request.data.get('participants')
         
-        if not participant_list_id:
+        # Поддержка двух режимов работы:
+        # 1. По ID списка участников (существующий функционал)
+        # 2. По данным участников напрямую (для выгрузки из Dashboard)
+        if participant_list_id:
+            try:
+                participant_list = ParticipantList.objects.get(id=participant_list_id)
+            except ParticipantList.DoesNotExist:
+                return Response(
+                    {"error": "Список участников не найден"}, 
+                    status=404
+                )
+            
+            participants = participant_list.participants.all()
+            
+            if not participants.exists():
+                return Response(
+                    {"error": "Список участников пуст"}, 
+                    status=400
+                )
+            
+            list_name = participant_list.name
+        elif participants_data and isinstance(participants_data, list):
+            # Режим прямой выгрузки из Dashboard
+            if len(participants_data) == 0:
+                return Response(
+                    {"error": "Список участников пуст"}, 
+                    status=400
+                )
+            
+            # Создаем временные объекты участников для обработки
+            participants = []
+            for p_data in participants_data:
+                # Парсим ФИО
+                fio_parts = p_data.get('fio', '').split(' ')
+                last_name = fio_parts[0] if len(fio_parts) > 0 else ''
+                first_name = fio_parts[1] if len(fio_parts) > 1 else ''
+                middle_name = fio_parts[2] if len(fio_parts) > 2 else ''
+                
+                # Создаем простой объект с нужными атрибутами
+                class TempParticipant:
+                    def __init__(self, data):
+                        self.last_name = data.get('last_name', last_name)
+                        self.first_name = data.get('first_name', first_name)
+                        self.middle_name = data.get('middle_name', middle_name)
+                        self.uin = data.get('uin', '')
+                        self.birth_date = self._parse_date(data.get('birthdate'))
+                        self.gender = data.get('gender', 'М')
+                        self.test_results_data = data.get('values', {})
+                    
+                    def _parse_date(self, date_str):
+                        if not date_str:
+                            return datetime.now().date()
+                        try:
+                            from datetime import datetime as dt
+                            return dt.strptime(date_str, '%Y-%m-%d').date()
+                        except:
+                            return datetime.now().date()
+                
+                participants.append(TempParticipant(p_data))
+            
+            list_name = f"Dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        else:
             return Response(
-                {"error": "Необходимо указать participant_list_id"}, 
-                status=400
-            )
-        
-        try:
-            participant_list = ParticipantList.objects.get(id=participant_list_id)
-        except ParticipantList.DoesNotExist:
-            return Response(
-                {"error": "Список участников не найден"}, 
-                status=404
-            )
-        
-        participants = participant_list.participants.all()
-        
-        if not participants.exists():
-            return Response(
-                {"error": "Список участников пуст"}, 
+                {"error": "Необходимо указать participant_list_id или participants"}, 
                 status=400
             )
         
@@ -130,13 +176,13 @@ class ExportFederalTemplateView(APIView):
         ws = wb.active
         
         # Определяем ступень и пол по первому участнику (для простоты)
-        # В реальном проекте нужно определять по всем участникам или передавать параметры
-        first_participant = participants.first()
+        first_participant = participants[0] if isinstance(participants, list) else participants.first()
         
         # Вычисляем возраст и определяем ступень
         today = datetime.now().date()
-        age = today.year - first_participant.birth_date.year
-        if (today.month, today.day) < (first_participant.birth_date.month, first_participant.birth_date.day):
+        birth_date = first_participant.birth_date if hasattr(first_participant, 'birth_date') else datetime.now().date()
+        age = today.year - birth_date.year
+        if (today.month, today.day) < (birth_date.month, birth_date.day):
             age -= 1
         
         # Определяем ступень по возрасту
@@ -150,7 +196,7 @@ class ExportFederalTemplateView(APIView):
         ws.cell(row=7, column=13).value = str(today.day)  # день
         ws.cell(row=7, column=14).value = self._get_month_name(today.month)  # месяц
         ws.cell(row=7, column=15).value = str(today.year)  # год
-        ws.cell(row=8, column=4).value = participant_list.name  # Наименование центра тестирования
+        ws.cell(row=8, column=4).value = list_name  # Наименование центра тестирования
         ws.cell(row=9, column=4).value = ''  # Адрес (можно добавить в модель ParticipantList)
         
         # Получаем упражнения для данной ступени
@@ -166,7 +212,7 @@ class ExportFederalTemplateView(APIView):
             
             # Ф.И.О.
             full_name = f"{participant.last_name} {participant.first_name}"
-            if participant.middle_name:
+            if hasattr(participant, 'middle_name') and participant.middle_name:
                 full_name += f" {participant.middle_name}"
             ws.cell(row=row_num, column=2).value = full_name
             
@@ -174,14 +220,19 @@ class ExportFederalTemplateView(APIView):
             ws.cell(row=row_num, column=3).value = ''
             
             # УИН
-            ws.cell(row=row_num, column=4).value = participant.uin or ''
+            ws.cell(row=row_num, column=4).value = getattr(participant, 'uin', '') or ''
             
             # Результаты испытаний (колонки E-O, 11 колонок)
-            # Получаем нормативы для участника
-            norms = self._get_participant_normatives(participant, step, exercises)
+            # Получаем результаты для участника
+            if hasattr(participant, 'test_results_data'):
+                # Для временных объектов из Dashboard
+                results_map = self._map_dashboard_results_to_exercises(participant.test_results_data, exercises)
+            else:
+                # Для объектов из БД
+                results_map = self._get_participant_normatives(participant, step, exercises)
             
             for col_idx, exercise in enumerate(exercises[:11], start=5):  # E=5, максимум 11 колонок
-                result = norms.get(exercise.id, '')
+                result = results_map.get(exercise.id, '')
                 ws.cell(row=row_num, column=col_idx).value = result
         
         # Сохраняем в буфер
@@ -190,7 +241,7 @@ class ExportFederalTemplateView(APIView):
         buffer.seek(0)
         
         # Формируем имя файла
-        filename = f"federal_template_{participant_list.name}_{today.strftime('%Y%m%d')}.xlsx"
+        filename = f"federal_template_{list_name}_{today.strftime('%Y%m%d')}.xlsx"
         
         response = HttpResponse(
             buffer.getvalue(),
@@ -323,6 +374,23 @@ class ExportFederalTemplateView(APIView):
         # Для упражнений без результата ставим прочерк
         for exercise in exercises:
             if exercise.id not in results:
+                results[exercise.id] = ''
+        
+        return results
+    
+    def _map_dashboard_results_to_exercises(self, values_dict, exercises):
+        """
+        Преобразует результаты из Dashboard (словарь {название_упражнения: значение})
+        в формат {exercise_id: значение} для экспорта.
+        """
+        results = {}
+        
+        for exercise in exercises:
+            # Ищем результат по названию упражнения
+            value = values_dict.get(exercise.name, '')
+            if value:
+                results[exercise.id] = value
+            else:
                 results[exercise.id] = ''
         
         return results
