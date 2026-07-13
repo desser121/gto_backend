@@ -1,0 +1,6 @@
+Django==5.2.13
+django-cors-headers==4.9.0
+djangorestframework==3.17.1
+gunicorn==25.3.0
+openpyxl>=3.0
+whitenoise>=6.5

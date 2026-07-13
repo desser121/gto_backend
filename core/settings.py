@@ -48,6 +48,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -129,7 +130,7 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Разрешить запросы с фронтенда
 CORS_ALLOWED_ORIGINS = [
-    "http://192.168.88.55:5173",  # IP вашего фронтенда
+    "http://192.168.88.75:5173",  # IP вашего фронтенда
     "http://localhost:5173",
 ]
 
@@ -138,3 +139,10 @@ CORS_ALLOWED_ORIGINS = [
 
 # Разрешить передачу куки/токенов
 CORS_ALLOW_CREDENTIALS = True
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+}

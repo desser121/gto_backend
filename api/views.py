@@ -5,7 +5,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.http import HttpResponse
 from .models import Normative, ParticipantList, Participant, Step, Exercise, TestResult
-from .serializers import NormativeSerializer, ParticipantListSerializer, ParticipantListCreateUpdateSerializer, ParticipantSerializer, TestResultSerializer
+from .serializers import (
+    NormativeSerializer, ParticipantListSerializer,
+    ParticipantListCreateUpdateSerializer, ParticipantSerializer,
+    TestResultSerializer
+)
 import openpyxl
 from datetime import datetime
 from io import BytesIO
@@ -17,14 +21,6 @@ class NormativeViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class TestResultViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet для управления результатами испытаний.
-    GET /api/test-results/ - получить все результаты (с фильтрацией по ?participant={id})
-    POST /api/test-results/ - создать новый результат
-    GET /api/test-results/{id}/ - получить детали результата
-    PUT/PATCH /api/test-results/{id}/ - обновить результат
-    DELETE /api/test-results/{id}/ - удалить результат
-    """
     queryset = TestResult.objects.all()
     serializer_class = TestResultSerializer
 
@@ -37,14 +33,6 @@ class TestResultViewSet(viewsets.ModelViewSet):
 
 
 class ParticipantListViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet для управления списками участников.
-    GET /api/participant-lists/ - получить все списки
-    POST /api/participant-lists/ - создать новый список
-    GET /api/participant-lists/{id}/ - получить детали списка с участниками
-    PUT/PATCH /api/participant-lists/{id}/ - обновить список
-    DELETE /api/participant-lists/{id}/ - удалить список
-    """
     queryset = ParticipantList.objects.all()
 
     def get_serializer_class(self):
@@ -54,14 +42,6 @@ class ParticipantListViewSet(viewsets.ModelViewSet):
 
 
 class ParticipantViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet для управления участниками.
-    GET /api/participants/ - получить всех участников (с фильтрацией по ?participant_list={id})
-    POST /api/participants/ - создать нового участника
-    GET /api/participants/{id}/ - получить детали участника
-    PUT/PATCH /api/participants/{id}/ - обновить участника
-    DELETE /api/participants/{id}/ - удалить участника
-    """
     queryset = Participant.objects.all()
     serializer_class = ParticipantSerializer
 
@@ -79,318 +59,101 @@ class CurrentUserView(APIView):
 
     def get(self, request):
         user = request.user
-        return Response(
-            {
-                "id": user.id,
-                "username": user.username,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "email": user.email,
-            }
-        )
+        return Response({
+            "id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
+        })
 
 
 class ExportFederalTemplateView(APIView):
-    """
-    Экспорт данных в федеральный шаблон GTO.
-    POST /api/export-federal-template/
-    Body: {"participant_list_id": <id>} ИЛИ {"participants": [...]} для прямой выгрузки из Dashboard
-    """
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        participant_list_id = request.data.get('participant_list_id')
-        participants_data = request.data.get('participants')
-        
-        # Поддержка двух режимов работы:
-        # 1. По ID списка участников (существующий функционал)
-        # 2. По данным участников напрямую (для выгрузки из Dashboard)
-        if participant_list_id:
-            try:
-                participant_list = ParticipantList.objects.get(id=participant_list_id)
-            except ParticipantList.DoesNotExist:
-                return Response(
-                    {"error": "Список участников не найден"}, 
-                    status=404
-                )
-            
-            participants = participant_list.participants.all()
-            
-            if not participants.exists():
-                return Response(
-                    {"error": "Список участников пуст"}, 
-                    status=400
-                )
-            
-            list_name = participant_list.name
-        elif participants_data and isinstance(participants_data, list):
-            # Режим прямой выгрузки из Dashboard
-            if len(participants_data) == 0:
-                return Response(
-                    {"error": "Список участников пуст"}, 
-                    status=400
-                )
-            
-            # Создаем временные объекты участников для обработки
-            participants = []
-            for p_data in participants_data:
-                # Парсим ФИО
-                fio_parts = p_data.get('fio', '').split(' ')
-                last_name = fio_parts[0] if len(fio_parts) > 0 else ''
-                first_name = fio_parts[1] if len(fio_parts) > 1 else ''
-                middle_name = fio_parts[2] if len(fio_parts) > 2 else ''
-                
-                # Создаем простой объект с нужными атрибутами
-                class TempParticipant:
-                    def __init__(self, data):
-                        self.last_name = data.get('last_name', last_name)
-                        self.first_name = data.get('first_name', first_name)
-                        self.middle_name = data.get('middle_name', middle_name)
-                        self.uin = data.get('uin', '')
-                        self.birth_date = self._parse_date(data.get('birthdate'))
-                        self.gender = data.get('gender', 'М')
-                        self.test_results_data = data.get('values', {})
-                    
-                    def _parse_date(self, date_str):
-                        if not date_str:
-                            return datetime.now().date()
-                        try:
-                            from datetime import datetime as dt
-                            return dt.strptime(date_str, '%Y-%m-%d').date()
-                        except:
-                            return datetime.now().date()
-                
-                participants.append(TempParticipant(p_data))
-            
-            list_name = f"Dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        else:
-            return Response(
-                {"error": "Необходимо указать participant_list_id или participants"}, 
-                status=400
-            )
-        
-        # Загружаем шаблон
+        participants_data = request.data.get('participants', [])
+        exercise_names = request.data.get('exercise_names', [])
+        region = request.data.get('region', 'Удмуртская Республика')
+        center_name = request.data.get('center_name', '')
+
+        if not participants_data:
+            return Response({"error": "Нет данных участников"}, status=400)
+        if not exercise_names:
+            return Response({"error": "Нет названий упражнений"}, status=400)
+
         template_path = 'api/federal_template.xlsx'
         wb = openpyxl.load_workbook(template_path)
         ws = wb.active
-        
-        # Определяем ступень и пол по первому участнику (для простоты)
-        first_participant = participants[0] if isinstance(participants, list) else participants.first()
-        
-        # Вычисляем возраст и определяем ступень
+
         today = datetime.now().date()
-        birth_date = first_participant.birth_date if hasattr(first_participant, 'birth_date') else datetime.now().date()
-        age = today.year - birth_date.year
-        if (today.month, today.day) < (birth_date.month, birth_date.day):
-            age -= 1
-        
-        # Определяем ступень по возрасту
-        step = self._get_step_by_age(age, first_participant.gender)
-        
-        # Заполняем шапку протокола
-        ws['D4'] = 'Удмуртская Республика'  # Регион (можно сделать настраиваемым)
-        ws.cell(row=6, column=1).value = f'Сводный протокол выполнения государственных требований к физической подготовленности граждан Российской Федерации - ступени {step}'
-        ws.cell(row=7, column=6).value = step  # ступень
-        ws.cell(row=7, column=7).value = 'мужской' if first_participant.gender == 'М' else 'женский'  # пол
-        ws.cell(row=7, column=13).value = str(today.day)  # день
-        ws.cell(row=7, column=14).value = self._get_month_name(today.month)  # месяц
-        ws.cell(row=7, column=15).value = str(today.year)  # год
-        ws.cell(row=8, column=4).value = list_name  # Наименование центра тестирования
-        ws.cell(row=9, column=4).value = ''  # Адрес (можно добавить в модель ParticipantList)
-        
-        # Получаем упражнения для данной ступени
-        exercises = self._get_exercises_for_step(step, first_participant.gender)
-        
-        # Заполняем данные участников
-        start_row = 13  # Первая строка для данных
-        for idx, participant in enumerate(participants, start=1):
-            row_num = start_row + idx - 1
-            
-            # № п/п
-            ws.cell(row=row_num, column=1).value = idx
-            
-            # Ф.И.О.
-            full_name = f"{participant.last_name} {participant.first_name}"
-            if hasattr(participant, 'middle_name') and participant.middle_name:
-                full_name += f" {participant.middle_name}"
-            ws.cell(row=row_num, column=2).value = full_name
-            
-            # Спортивное звание (пока пусто, можно добавить в модель)
-            ws.cell(row=row_num, column=3).value = ''
-            
-            # УИН
-            ws.cell(row=row_num, column=4).value = getattr(participant, 'uin', '') or ''
-            
-            # Результаты испытаний (колонки E-O, 11 колонок)
-            # Получаем результаты для участника
-            if hasattr(participant, 'test_results_data'):
-                # Для временных объектов из Dashboard
-                results_map = self._map_dashboard_results_to_exercises(participant.test_results_data, exercises)
-            else:
-                # Для объектов из БД
-                results_map = self._get_participant_normatives(participant, step, exercises)
-            
-            for col_idx, exercise in enumerate(exercises[:11], start=5):  # E=5, максимум 11 колонок
-                result = results_map.get(exercise.id, '')
-                ws.cell(row=row_num, column=col_idx).value = result
-        
-        # Сохраняем в буфер
+
+        ws['D4'] = region
+
+        if center_name:
+            ws['D8'] = center_name
+
+        if participants_data:
+            first = participants_data[0]
+            age = self._calc_age(first.get('birthdate', ''))
+            gender = first.get('gender', 'М')
+            step = first.get('step', '')
+
+            ws['F7'] = step
+            ws['G7'] = 'мужской' if gender == 'М' else 'женский'
+            ws['M7'] = f'« {today.day} »'
+            ws['N7'] = self._month_name(today.month)
+            ws['O7'] = f'{today.year} года'
+
+        for i, name in enumerate(exercise_names):
+            col = 5 + i
+            ws.cell(row=12, column=col).value = name
+
+        for idx, p in enumerate(participants_data):
+            row = 13 + idx
+            ws.cell(row=row, column=1).value = idx + 1
+
+            fio = p.get('fio', '')
+            ws.cell(row=row, column=2).value = fio
+            ws.cell(row=row, column=4).value = p.get('uin', '')
+            ws.cell(row=row, column=3).value = ''
+
+            values = p.get('values', {})
+            for i, ex_name in enumerate(exercise_names):
+                col = 5 + i
+                val = values.get(ex_name, '')
+                ws.cell(row=row, column=col).value = val if val else ''
+
         buffer = BytesIO()
         wb.save(buffer)
         buffer.seek(0)
-        
-        # Формируем имя файла
-        filename = f"federal_template_{list_name}_{today.strftime('%Y%m%d')}.xlsx"
-        
+
+        filename = f"federal_template_{today.strftime('%Y%m%d_%H%M%S')}.xlsx"
         response = HttpResponse(
             buffer.getvalue(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
         return response
-    
-    def _get_step_by_age(self, age, gender):
-        """Определяет ступень по возрасту и полу"""
+
+    def _calc_age(self, birthdate_str):
+        if not birthdate_str:
+            return 0
         try:
-            step = Step.objects.filter(age_min__lte=age, age_max__gte=age, gender=gender).first()
-            if step:
-                return step.name
-        except:
-            pass
-        
-        # Fallback по возрастным группам
-        if age <= 7:
-            return "I (6-7 лет)"
-        elif age <= 9:
-            return "II (8-9 лет)"
-        elif age <= 11:
-            return "III (10-11 лет)"
-        elif age <= 13:
-            return "IV (12-13 лет)"
-        elif age <= 15:
-            return "V (14-15 лет)"
-        elif age <= 17:
-            return "VI (16-17 лет)"
-        elif age <= 19:
-            return "VII (18-19 лет)"
-        elif age <= 24:
-            return "VIII (20-24 лет)"
-        elif age <= 29:
-            return "IX (25-29 лет)"
-        elif age <= 34:
-            return "X (30-34 лет)"
-        elif age <= 39:
-            return "XI (35-39 лет)"
-        elif age <= 44:
-            return "XII (40-44 лет)"
-        elif age <= 49:
-            return "XIII (45-49 лет)"
-        elif age <= 54:
-            return "XIV (50-54 лет)"
-        elif age <= 59:
-            return "XV (55-59 лет)"
-        elif age <= 64:
-            return "XVI (60-64 лет)"
-        elif age <= 69:
-            return "XVII (65-69 лет)"
-        else:
-            return "XVIII (70-100 лет)"
-    
-    def _get_month_name(self, month):
-        """Возвращает название месяца на русском"""
+            bd = datetime.strptime(birthdate_str, '%Y-%m-%d').date()
+            today = datetime.now().date()
+            age = today.year - bd.year
+            if (today.month, today.day) < (bd.month, bd.day):
+                age -= 1
+            return age
+        except Exception:
+            return 0
+
+    def _month_name(self, m):
         months = {
             1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
             5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
             9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
         }
-        return months.get(month, '')
-    
-    def _get_exercises_for_step(self, step_name, gender):
-        """Получает список упражнений для данной ступени"""
-        try:
-            step = Step.objects.filter(name=step_name, gender=gender).first()
-            if step:
-                # Получаем уникальные упражнения из нормативов для этой ступени
-                norms = Normative.objects.filter(step=step).select_related('exercise')
-                exercises = []
-                seen = set()
-                for norm in norms:
-                    if norm.exercise.id not in seen:
-                        exercises.append(norm.exercise)
-                        seen.add(norm.exercise.id)
-                return exercises[:11]  # Максимум 11 упражнений для колонок E-O
-        except:
-            pass
-        
-        # Fallback - первые 11 упражнений
-        return list(Exercise.objects.all()[:11])
-    
-    def _get_participant_normatives(self, participant, step_name, exercises):
-        """
-        Получает результаты участника по упражнениям.
-        Использует модель TestResult для получения реальных результатов.
-        Возвращает ЛУЧШИЙ результат по каждому упражнению (если их несколько).
-        """
-        results = {}
-        
-        # Получаем все результаты испытаний для данного участника
-        test_results = TestResult.objects.filter(
-            participant=participant,
-            exercise__in=exercises
-        ).select_related('exercise')
-        
-        # Группируем результаты по упражнениям и выбираем лучший
-        exercise_results = {}
-        for test_result in test_results:
-            ex_id = test_result.exercise.id
-            
-            if ex_id not in exercise_results:
-                exercise_results[ex_id] = []
-            exercise_results[ex_id].append(test_result)
-        
-        # Для каждого упражнения выбираем лучший результат
-        for ex_id, result_list in exercise_results.items():
-            # Находим упражнение чтобы узнать is_higher_better
-            exercise = result_list[0].exercise
-            norm = Normative.objects.filter(
-                exercise=exercise,
-                step__name=step_name
-            ).first()
-            
-            is_higher_better = norm.is_higher_better if norm else False
-            
-            # Сортируем результаты и берем лучший
-            if is_higher_better:
-                # Чем больше значение, тем лучше (отжимания, прыжки)
-                best_result = max(result_list, key=lambda x: x.result)
-            else:
-                # Чем меньше значение, тем лучше (бег)
-                best_result = min(result_list, key=lambda x: x.result)
-            
-            results[ex_id] = best_result.result
-        
-        # Для упражнений без результата ставим прочерк
-        for exercise in exercises:
-            if exercise.id not in results:
-                results[exercise.id] = ''
-        
-        return results
-    
-    def _map_dashboard_results_to_exercises(self, values_dict, exercises):
-        """
-        Преобразует результаты из Dashboard (словарь {название_упражнения: значение})
-        в формат {exercise_id: значение} для экспорта.
-        """
-        results = {}
-        
-        for exercise in exercises:
-            # Ищем результат по названию упражнения
-            value = values_dict.get(exercise.name, '')
-            if value:
-                results[exercise.id] = value
-            else:
-                results[exercise.id] = ''
-        
-        return results
+        return months.get(m, '')
