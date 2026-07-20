@@ -2,6 +2,22 @@ from rest_framework import serializers
 from .models import Step, Exercise, Normative, ParticipantList, Participant, TestResult
 
 
+class StepSerializer(serializers.ModelSerializer):
+    gender_display = serializers.CharField(source='get_gender_display', read_only=True)
+
+    class Meta:
+        model = Step
+        fields = ['id', 'name', 'gender', 'gender_display', 'age_min', 'age_max',
+                  'gold_mandatory', 'gold_optional', 'silver_mandatory', 'silver_optional',
+                  'bronze_mandatory', 'bronze_optional']
+
+
+class ExerciseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Exercise
+        fields = ['id', 'name']
+
+
 class NormativeSerializer(serializers.ModelSerializer):
     # Вытягиваем названия вместо просто ID
     step_name = serializers.CharField(source='step.name', read_only=True)
@@ -13,9 +29,10 @@ class NormativeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Normative
         fields = [
-            'id', 'step_name', 'step_gender', 'step_age_min', 'step_age_max', 
-            'exercise_name', 'gold', 'silver', 'bronze', 'is_mandatory', 
-            'is_higher_better' 
+            'id', 'step', 'exercise',
+            'step_name', 'step_gender', 'step_age_min', 'step_age_max',
+            'exercise_name', 'gold', 'silver', 'bronze', 'is_mandatory',
+            'is_higher_better'
         ]
 
 

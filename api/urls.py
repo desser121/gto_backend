@@ -3,12 +3,16 @@ from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
 from .views import (
     NormativeViewSet, CurrentUserView, ParticipantListViewSet,
-    ParticipantViewSet, ExportFederalTemplateView, TestResultViewSet
+    ParticipantViewSet, ExportFederalTemplateView, TestResultViewSet,
+    UserManagementView, UserManagementDetailView, RoleChoicesView,
+    ActivityLogView, StepViewSet, ExerciseViewSet
 )
 from .save_list_view import SaveDashboardListView
 
 router = DefaultRouter()
 router.register(r'norms', NormativeViewSet)
+router.register(r'steps', StepViewSet)
+router.register(r'exercises', ExerciseViewSet)
 router.register(r'participant-lists', ParticipantListViewSet)
 router.register(r'participants', ParticipantViewSet)
 router.register(r'test-results', TestResultViewSet)
@@ -19,4 +23,8 @@ urlpatterns = [
     path('user/', CurrentUserView.as_view(), name='current_user'),
     path('export-federal-template/', ExportFederalTemplateView.as_view(), name='export_federal_template'),
     path('save-list/', SaveDashboardListView.as_view(), name='save_dashboard_list'),
+    path('users/', UserManagementView.as_view(), name='user_management'),
+    path('users/<int:user_id>/', UserManagementDetailView.as_view(), name='user_management_detail'),
+    path('roles/', RoleChoicesView.as_view(), name='role_choices'),
+    path('activity/', ActivityLogView.as_view(), name='activity_log'),
 ]

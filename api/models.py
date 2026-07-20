@@ -140,3 +140,65 @@ class TestResult(models.Model):
     def __str__(self):
         medal_display = self.get_medal_display()
         return f"{self.participant} - {self.exercise}: {self.result} ({medal_display})"
+
+ROLE_CHOICES = [
+    ('root', 'Суперадмин'),
+    ('admin', 'Администратор'),
+    ('editor', 'Редактор'),
+    ('viewer', 'Наблюдатель'),
+]
+
+ROLE_PERMISSIONS = {
+    'root': ['manage_users', 'create_list', 'delete_list', 'edit_list', 'view_list', 'export_federal', 'save_list'],
+    'admin': ['create_list', 'delete_list', 'edit_list', 'view_list', 'export_federal', 'save_list'],
+    'editor': ['create_list', 'edit_list', 'view_list', 'export_federal', 'save_list'],
+    'viewer': ['view_list', 'export_federal'],
+}
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name='profile')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='viewer')
+
+    class Meta:
+        verbose_name = 'Профиль пользователя'
+        verbose_name_plural = 'Профили пользователей'
+
+    def __str__(self):
+        return f'{self.user.username} ({self.get_role_display()})'
+
+    @property
+    def permissions(self):
+        return ROLE_PERMISSIONS.get(self.role, ROLE_PERMISSIONS['viewer'])
+
+
+class AuditLog(models.Model):
+    ACTION_CHOICES = [
+        ('login', 'Вход в систему'),
+        ('logout', 'Выход из системы'),
+        ('create_list', 'Создание списка'),
+        ('delete_list', 'Удаление списка'),
+        ('save_list', 'Сохранение списка'),
+        ('edit_list', 'Редактирование списка'),
+        ('export_federal', 'Выгрузка федерального шаблона'),
+        ('create_user', 'Создание пользователя'),
+        ('edit_user', 'Редактирование пользователя'),
+        ('delete_user', 'Удаление пользователя'),
+        ('change_role', 'Смена роли пользователя'),
+        ('view_list', 'Просмотр списка'),
+        ('view_home', 'Просмотр главной страницы'),
+    ]
+
+    user = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, related_name='audit_logs')
+    action = models.CharField(max_length=30, choices=ACTION_CHOICES)
+    description = models.TextField(blank=True, default='')
+    target_name = models.CharField(max_length=200, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Журнал действий'
+        verbose_name_plural = 'Журналы действий'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.user} - {self.get_action_display()} - {self.created_at}'

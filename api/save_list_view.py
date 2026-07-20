@@ -4,6 +4,8 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from .models import ParticipantList, Participant, Exercise, TestResult
+from .permissions import get_user_permissions
+from .audit import log_action
 from datetime import datetime
 
 
@@ -13,6 +15,10 @@ class SaveDashboardListView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        perms, _ = get_user_permissions(request.user)
+        if 'save_list' not in perms:
+            return Response({'error': 'Нет прав на сохранение списков'}, status=403)
+
         list_id = request.data.get('list_id')
         list_name = request.data.get('list_name', 'Расчет знака')
         rows = request.data.get('rows', [])
@@ -88,6 +94,8 @@ class SaveDashboardListView(APIView):
                         result_date=bd,
                         medal=medal,
                     )
+
+        log_action(request.user, 'save_list', f'Сохранён список "{list_name}"', f'{plist.participants.count()} участников')
 
         return Response({
             'list_id': plist.id,
